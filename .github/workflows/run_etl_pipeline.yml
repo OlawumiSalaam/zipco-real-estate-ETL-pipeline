@@ -1,0 +1,54 @@
+name: Automate Data ETL Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * *'  # This runs the job daily at midnight
+  workflow_dispatch:  # manual triggers
+
+jobs:
+  run-etl-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}  # Use the PAT instead of the default GITHUB_TOKEN
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+        cache: 'pip'  # caching pip dependencies
+
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
+    - name: Run ETL script
+      env:
+        POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        REALTY_MOLE_API_URL: ${{ secrets.REALTY_MOLE_API_URL }}
+        REALTY_MOLE_API_KEY: ${{ secrets.REALTY_MOLE_API_KEY }}
+        REALTY_MOLE_API_HOST: ${{ secrets.REALTY_MOLE_API_HOST }}
+      run: python postgres_pipeline.py  # run data pipeline
+
+    - name: Check for changes  # create env variable indicating if any changes were made
+      id: git-check
+      run: |
+        git config user.name 'github-actions'
+        git config user.email 'git-actions@github.com'
+        git add .
+        git diff --staged --quiet || echo "changes=true" >> $GITHUB_ENV
+
+    - name: Commit and push if changes
+      if: env.changes == 'true'  # if changes made, push new data to repo
+      run: |
+        git commit -m "updated property records"
+        git push
+let'
